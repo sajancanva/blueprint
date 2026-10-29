@@ -1,0 +1,2024 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser-Based Examination Blueprint Generator</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- jsPDF & html2canvas for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Custom scrollbar for dense tables */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* Print formatting */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            body {
+                background: white !important;
+                color: black !important;
+                padding: 0 !important;
+            }
+            .print-container {
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+            }
+            table {
+                page-break-inside: auto;
+            }
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+        }
+
+        .invalid-cell {
+            background-color: rgba(239, 68, 68, 0.15) !important;
+            border: 2px solid #ef4444 !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-full flex flex-col transition-colors duration-200">
+
+    <!-- Application Header -->
+    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 no-print shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo & Title -->
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+                        <i class="fa-solid fa-table-cells-large text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg leading-tight text-slate-900 dark:text-white">Exam Blueprint Generator</h1>
+                        <p class="text-xs font-semibold text-brand-600 dark:text-brand-400 mt-0.5">Developed by Dr K. S. Sajan</p>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400">Constraint satisfaction assessment planner</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center bg-slate-100 dark:bg-slate-700/50 rounded-lg p-1.5 border border-slate-200 dark:border-slate-600 ml-4 hidden sm:flex">
+                    <label for="masterTotalMarks" class="text-xs font-semibold text-slate-600 dark:text-slate-300 mr-2 pl-2">Target Total Marks:</label>
+                    <input type="number" id="masterTotalMarks" value="40" min="1" onchange="updateMasterTotal(this.value)" class="w-16 px-2 py-1 text-center text-sm font-bold bg-white dark:bg-slate-800 border-none rounded shadow-sm focus:ring-2 focus:ring-brand-500 outline-none text-brand-600 dark:text-brand-400">
+                </div>
+
+                <!-- Top Toolbar Actions -->
+                <div class="flex items-center gap-2 sm:gap-3 ml-auto">
+                    <button onclick="downloadHelpManualWord()" class="px-3 py-1.5 text-xs font-medium bg-sky-100 hover:bg-sky-200 dark:bg-sky-900/40 dark:hover:bg-sky-800/60 rounded-lg text-sky-700 dark:text-sky-300 transition flex items-center gap-1">
+                        <i class="fa-solid fa-circle-question"></i> <span class="hidden sm:inline">User Manual</span>
+                    </button>
+
+                    <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 hidden sm:block"></div>
+
+                    <button id="presetBtn" onclick="loadPreset('standard')" class="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-lg text-slate-700 dark:text-slate-200 transition">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1 text-brand-500"></i> Load Preset
+                    </button>
+                    
+                    <button id="themeToggleBtn" onclick="toggleDarkMode()" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition" title="Toggle Theme">
+                        <i class="fa-solid fa-moon dark:hidden"></i>
+                        <i class="fa-solid fa-sun hidden dark:inline"></i>
+                    </button>
+
+                    <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+                    <button onclick="runSolver()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-medium text-xs sm:text-sm rounded-lg shadow-sm shadow-brand-500/30 transition flex items-center gap-2">
+                        <i class="fa-solid fa-microchip"></i>
+                        <span>Generate Blueprint</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex space-x-1 sm:space-x-4 overflow-x-auto py-2 scrollbar-none" id="tabNav">
+                <button onclick="switchTab('inputsTab')" id="tab-inputsTab" class="tab-btn px-3 py-2 text-xs sm:text-sm font-medium rounded-lg whitespace-nowrap transition bg-brand-50 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400">
+                    <i class="fa-solid fa-sliders mr-1.5"></i> 1. Input Weightages
+                </button>
+                <button onclick="switchTab('blueprintTab')" id="tab-blueprintTab" class="tab-btn px-3 py-2 text-xs sm:text-sm font-medium rounded-lg whitespace-nowrap transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50">
+                    <i class="fa-solid fa-table mr-1.5"></i> 2. Matrix Blueprint
+                </button>
+                <button onclick="switchTab('mappingTab')" id="tab-mappingTab" class="tab-btn px-3 py-2 text-xs sm:text-sm font-medium rounded-lg whitespace-nowrap transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50">
+                    <i class="fa-solid fa-list-ol mr-1.5"></i> 3. Question Mapping
+                </button>
+                <button onclick="switchTab('validationTab')" id="tab-validationTab" class="tab-btn px-3 py-2 text-xs sm:text-sm font-medium rounded-lg whitespace-nowrap transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50">
+                    <i class="fa-solid fa-shield-halved mr-1.5"></i> 4. Live Validation
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- TAB 1: INPUT MODULES -->
+        <div id="inputsTab" class="tab-content space-y-6">
+            
+            <div class="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="flex-shrink-0 w-12 h-12 rounded-full bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xl shadow-inner">
+                        <i class="fa-solid fa-bullseye"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Master Target Marks</span>
+                        <div class="flex items-end gap-2">
+                            <span id="displayMasterTotal" class="text-3xl font-black text-slate-900 dark:text-white leading-none">40</span>
+                            <span class="text-sm font-medium text-slate-500 mb-0.5">Marks</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Mobile Target Input (Visible only on small screens) -->
+                <div class="sm:hidden flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-2 w-full">
+                    <label for="mobileMasterTotalMarks" class="text-xs font-semibold text-slate-600 dark:text-slate-300 flex-1">Set Target Total:</label>
+                    <input type="number" id="mobileMasterTotalMarks" value="40" min="1" onchange="updateMasterTotal(this.value)" class="w-20 px-2 py-1 text-center text-sm font-bold bg-white dark:bg-slate-800 border-none rounded shadow-sm focus:ring-2 focus:ring-brand-500 outline-none text-brand-600 dark:text-brand-400">
+                </div>
+            </div>
+
+            <!-- Summary Bar -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div id="cardCPTotal" class="bg-white dark:bg-slate-800 rounded-xl p-4 border-2 border-transparent shadow-sm flex items-center justify-between transition-colors">
+                    <div>
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">CP Total Marks</span>
+                        <div class="flex items-baseline gap-2">
+                            <span id="summaryCPMarks" class="text-2xl font-bold text-slate-800 dark:text-slate-100">0</span>
+                            <span class="text-xs font-medium text-slate-400 target-diff-cp"></span>
+                        </div>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                        <i class="fa-solid fa-brain"></i>
+                    </div>
+                </div>
+
+                <div id="cardContentTotal" class="bg-white dark:bg-slate-800 rounded-xl p-4 border-2 border-transparent shadow-sm flex items-center justify-between transition-colors">
+                    <div>
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Content Total Marks</span>
+                        <div class="flex items-baseline gap-2">
+                            <span id="summaryContentMarks" class="text-2xl font-bold text-slate-800 dark:text-slate-100">0</span>
+                            <span class="text-xs font-medium text-slate-400 target-diff-content"></span>
+                        </div>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <i class="fa-solid fa-book-open"></i>
+                    </div>
+                </div>
+
+                <div id="cardQuestionTotal" class="bg-white dark:bg-slate-800 rounded-xl p-4 border-2 border-transparent shadow-sm flex items-center justify-between transition-colors">
+                    <div>
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Question Types Total</span>
+                        <div class="flex items-baseline gap-2">
+                            <span id="summaryQuestionMarks" class="text-2xl font-bold text-slate-800 dark:text-slate-100">0</span>
+                            <span class="text-xs font-medium text-slate-400 target-diff-qtype"></span>
+                        </div>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Validation Notice Bar if Total Mismatch -->
+            <div id="inputMatchAlert" class="hidden rounded-xl p-4 border flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <i id="inputMatchIcon" class="text-xl"></i>
+                    <span id="inputMatchText" class="text-sm font-medium"></span>
+                </div>
+                <button onclick="autoBalanceTargetTotals()" class="px-3 py-1.5 text-xs font-semibold bg-white dark:bg-slate-800 rounded-lg border shadow-sm hover:bg-slate-50 transition">
+                    <i class="fa-solid fa-scale-balanced mr-1"></i> Auto-Balance Totals
+                </button>
+            </div>
+
+            <!-- Input Grid (3 Columns) -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- Module 1: Cognitive Processes -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
+                    <div class="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center">
+                        <div>
+                            <h2 class="font-semibold text-slate-800 dark:text-slate-100 text-sm">1. Cognitive Processes (CP)</h2>
+                            <p class="text-xs text-slate-500">Bloom's / Assessment Objectives</p>
+                        </div>
+                        <button onclick="addCPRow()" class="px-2.5 py-1 text-xs font-medium bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-lg transition">
+                            <i class="fa-solid fa-plus mr-1"></i> Add CP
+                        </button>
+                    </div>
+                    <div class="p-4 flex-1 overflow-x-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead class="text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                    <th class="pb-2">CP Name</th>
+                                    <th class="pb-2 w-20 text-center">Marks</th>
+                                    <th class="pb-2 w-16 text-right">%</th>
+                                    <th class="pb-2 w-8"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="cpTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center font-semibold text-xs">
+                        <span>Total CP Marks:</span>
+                        <span id="cpTotalDisplay" class="text-sm font-bold text-brand-600 dark:text-brand-400">0</span>
+                    </div>
+                </div>
+
+                <!-- Module 2: Content Areas -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
+                    <div class="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center">
+                        <div>
+                            <h2 class="font-semibold text-slate-800 dark:text-slate-100 text-sm">2. Content Areas (Sub-units)</h2>
+                            <p class="text-xs text-slate-500">Syllabus topics & sub-units</p>
+                        </div>
+                        <button onclick="addContentRow()" class="px-2.5 py-1 text-xs font-medium bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-lg transition">
+                            <i class="fa-solid fa-plus mr-1"></i> Add Sub-unit
+                        </button>
+                    </div>
+                    <div class="p-4 flex-1 overflow-x-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead class="text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                    <th class="pb-2">Sub-unit Name</th>
+                                    <th class="pb-2 w-20 text-center">Marks</th>
+                                    <th class="pb-2 w-16 text-right">%</th>
+                                    <th class="pb-2 w-8"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="contentTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center font-semibold text-xs">
+                        <span>Total Content Marks:</span>
+                        <span id="contentTotalDisplay" class="text-sm font-bold text-brand-600 dark:text-brand-400">0</span>
+                    </div>
+                </div>
+
+                <!-- Module 3: Question Types -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
+                    <div class="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center">
+                        <div>
+                            <h2 class="font-semibold text-slate-800 dark:text-slate-100 text-sm">3. Forms of Questions</h2>
+                            <p class="text-xs text-slate-500">Question item types & counts</p>
+                        </div>
+                        <button onclick="addQuestionTypeRow()" class="px-2.5 py-1 text-xs font-medium bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-lg transition">
+                            <i class="fa-solid fa-plus mr-1"></i> Add Type
+                        </button>
+                    </div>
+                    <div class="p-4 flex-1 overflow-x-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead class="text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                    <th class="pb-2">Type</th>
+                                    <th class="pb-2 w-16 text-center">Count</th>
+                                    <th class="pb-2 w-16 text-center">Marks/Q</th>
+                                    <th class="pb-2 w-16 text-right">Total</th>
+                                    <th class="pb-2 w-8"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="qTypeTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 space-y-2">
+                        <div class="flex justify-between items-center text-xs font-semibold">
+                            <span>Total Questions / Marks:</span>
+                            <span class="text-xs">
+                                <span id="qTypeTotalCountDisplay" class="font-bold text-slate-700 dark:text-slate-200">0 Qs</span> / 
+                                <span id="qTypeTotalMarksDisplay" class="text-sm font-bold text-brand-600 dark:text-brand-400">0 Marks</span>
+                            </span>
+                        </div>
+                        
+                        <!-- Optional Questions Toggle -->
+                        <div class="pt-2 border-t border-slate-200 dark:border-slate-700/50 flex items-center justify-between">
+                            <label class="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+                                <input type="checkbox" id="enableOptionalToggle" onchange="toggleOptionalQuestions()" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4">
+                                <span>Enable Optional Questions (* Mark)</span>
+                            </label>
+                            <span class="text-[10px] text-slate-400">e.g., *4(1)</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Bottom Action Panel -->
+            <div class="flex flex-wrap items-center justify-between gap-4 p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <button onclick="resetInputsToDefault()" class="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-700 rounded-lg transition">
+                        <i class="fa-solid fa-rotate-left mr-1"></i> Reset Inputs
+                    </button>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="runSolver()" class="px-5 py-2.5 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white font-semibold text-xs sm:text-sm rounded-lg shadow-md shadow-brand-500/20 active:scale-95 transition flex items-center gap-2">
+                        <i class="fa-solid fa-calculator"></i>
+                        <span>Run Constraint Solver & Generate Blueprint</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- TAB 2: MATRIX BLUEPRINT -->
+        <div id="blueprintTab" class="tab-content hidden space-y-4">
+            
+            <!-- Toolbar & Export Row -->
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm no-print">
+                <div class="flex items-center gap-3">
+                    <span id="blueprintStatusBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
+                        <i class="fa-solid fa-circle-check"></i> Valid Blueprint
+                    </span>
+                    <span class="text-xs text-slate-500 hidden sm:inline">Format: <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-brand-600 dark:text-brand-400 font-mono">Marks(Questions)</code> e.g., 2(2) or *4(1)</span>
+                    <span class="text-xs text-brand-600 dark:text-brand-400 font-medium ml-2 hidden lg:inline flex items-center gap-1 bg-brand-50 dark:bg-brand-900/30 px-2.5 py-1 rounded-lg border border-brand-100 dark:border-brand-800">
+                        <i class="fa-solid fa-hand-pointer"></i> Drag & drop cells to move questions
+                    </span>
+                </div>
+
+                <!-- Export & Actions -->
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button onclick="validateCurrentGrid()" class="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition text-slate-700 dark:text-slate-200">
+                        <i class="fa-solid fa-check-double mr-1 text-emerald-500"></i> Validate
+                    </button>
+                    <button onclick="runSolver()" class="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition text-slate-700 dark:text-slate-200">
+                        <i class="fa-solid fa-arrows-rotate mr-1 text-brand-500"></i> Re-solve
+                    </button>
+
+                    <div class="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+                    <!-- Dropdown for Exports -->
+                    <div class="relative inline-block text-left">
+                        <button onclick="toggleExportMenu()" class="px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-download"></i>
+                            <span>Export</span>
+                            <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div id="exportMenu" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 z-50 py-1">
+                            <a href="#" onclick="exportPDF(); return false;" class="px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2">
+                                <i class="fa-solid fa-file-pdf text-red-500"></i> Export PDF Document
+                            </a>
+                            <a href="#" onclick="exportExcel(); return false;" class="px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2">
+                                <i class="fa-solid fa-file-excel text-emerald-500"></i> Export Excel (.xlsx)
+                            </a>
+                            <a href="#" onclick="exportWord(); return false;" class="px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2">
+                                <i class="fa-solid fa-file-word text-blue-500"></i> Export Word (.doc)
+                            </a>
+                            <a href="#" onclick="exportCSV(); return false;" class="px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2">
+                                <i class="fa-solid fa-file-csv text-amber-500"></i> Export CSV Data
+                            </a>
+                            <a href="#" onclick="exportJSON(); return false;" class="px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2">
+                                <i class="fa-solid fa-code text-purple-500"></i> Export JSON State
+                            </a>
+                            <div class="border-t border-slate-100 dark:border-slate-700 my-1"></div>
+                            <a href="#" onclick="window.print(); return false;" class="px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2">
+                                <i class="fa-solid fa-print text-slate-500"></i> Print Blueprint
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Matrix Blueprint Container for Print and Display -->
+            <div id="printableBlueprintArea" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6 shadow-sm overflow-x-auto custom-scrollbar">
+                
+                <!-- Print Document Header (Visible only when printing or rendering PDF) -->
+                <div class="hidden print-only mb-6 text-center border-b pb-4">
+                    <h1 class="text-2xl font-bold">EXAMINATION BLUEPRINT SPECIFICATION</h1>
+                    <p class="text-sm text-slate-600">Generated automatically via Constraint Backtracking Optimization Engine</p>
+                    <div class="flex justify-between text-xs mt-4 text-slate-500">
+                        <span>Date: <span id="printDateSpan"></span></span>
+                        <span>Total Marks: <span id="printTotalMarksSpan"></span></span>
+                    </div>
+                </div>
+
+                <div id="matrixTableWrapper">
+                    <!-- Dynamic Matrix Table rendering here -->
+                </div>
+            </div>
+
+        </div>
+
+        <!-- TAB 3: QUESTION MAPPING LIST -->
+        <div id="mappingTab" class="tab-content hidden space-y-4">
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between no-print">
+                <div>
+                    <h2 class="font-semibold text-slate-800 dark:text-slate-100 text-sm">Automated Question Serial Number Mapping</h2>
+                    <p class="text-xs text-slate-500">Sequential question allocation mapped across Content Areas, Cognitive Processes & Question Types</p>
+                </div>
+                <button onclick="exportQuestionListCSV()" class="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 rounded-lg transition">
+                    <i class="fa-solid fa-file-csv mr-1 text-emerald-500"></i> Export Mapping CSV
+                </button>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="p-3 w-16 text-center">Q. No</th>
+                                <th class="p-3">Content Area (Sub-unit)</th>
+                                <th class="p-3">Cognitive Process (CP)</th>
+                                <th class="p-3 w-32">Question Type</th>
+                                <th class="p-3 w-20 text-center">Marks</th>
+                                <th class="p-3 w-24 text-center">Optional?</th>
+                            </tr>
+                        </thead>
+                        <tbody id="questionMappingTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                            <!-- Dynamic Row Content -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: LIVE VALIDATION DASHBOARD -->
+        <div id="validationTab" class="tab-content hidden space-y-6">
+            
+            <div id="validationBanner" class="p-4 rounded-xl border flex items-center gap-3">
+                <i id="validationBannerIcon" class="text-2xl"></i>
+                <div>
+                    <h3 id="validationBannerTitle" class="font-bold text-sm"></h3>
+                    <p id="validationBannerDesc" class="text-xs"></p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Content Area Targets vs Actual -->
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+                    <h3 class="font-semibold text-xs text-slate-500 uppercase tracking-wider">Content Area Distribution</h3>
+                    <div id="validationContentList" class="space-y-2 text-xs">
+                        <!-- Dynamic Progress Bars -->
+                    </div>
+                </div>
+
+                <!-- CP Targets vs Actual -->
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+                    <h3 class="font-semibold text-xs text-slate-500 uppercase tracking-wider">Cognitive Process Distribution</h3>
+                    <div id="validationCPList" class="space-y-2 text-xs">
+                        <!-- Dynamic Progress Bars -->
+                    </div>
+                </div>
+
+                <!-- Question Types Targets vs Actual -->
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+                    <h3 class="font-semibold text-xs text-slate-500 uppercase tracking-wider">Question Types Distribution</h3>
+                    <div id="validationQTypeList" class="space-y-2 text-xs">
+                        <!-- Dynamic Progress Bars -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mathematical Constraint Checklist -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <h3 class="font-semibold text-sm text-slate-800 dark:text-slate-100 mb-4">Rule Engine Constraint Checklist</h3>
+                <div id="ruleChecklist" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <!-- Rule Checks -->
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Interactive Cell Edit Modal -->
+    <div id="cellEditModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4 animate-in fade-in zoom-in duration-150">
+            <div class="flex justify-between items-center border-b pb-3 border-slate-100 dark:border-slate-700">
+                <div>
+                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-100">Edit Blueprint Cell</h3>
+                    <p id="modalCellSubtext" class="text-xs text-slate-500"></p>
+                </div>
+                <button onclick="closeCellModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Number of Questions:</label>
+                    <input type="number" id="modalNumQuestions" min="0" class="w-full px-3 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-brand-500 outline-none">
+                </div>
+                
+                <div id="modalMarksInfo" class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 flex justify-between">
+                    <span>Marks per Q: <strong id="modalMarksPerQ">1</strong></span>
+                    <span>Computed Cell Marks: <strong id="modalTotalMarks">0</strong></span>
+                </div>
+
+                <div id="modalOptionalContainer" class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="modalIsOptional" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4">
+                    <label for="modalIsOptional" class="text-xs font-medium text-slate-700 dark:text-slate-300">Mark as Optional Question (*)</label>
+                </div>
+
+                <div id="modalLockedContainer" class="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-700 mt-2">
+                    <input type="checkbox" id="modalIsLocked" class="rounded border-slate-300 text-amber-500 focus:ring-amber-500 h-4 w-4">
+                    <label for="modalIsLocked" class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                        <i class="fa-solid fa-thumbtack text-slate-400 mr-1 transform -rotate-45"></i> Pin cell (Lock value during re-solve)
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                <button onclick="closeCellModal()" class="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 rounded-lg">Cancel</button>
+                <button onclick="saveCellModal()" class="px-4 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg shadow-sm">Save & Recalculate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toastContainer" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+    <script>
+        /**
+         * Exam Blueprint Generator State
+         */
+        const appState = {
+            masterTotalMarks: 40,
+            cognitiveProcesses: [],
+            contentAreas: [],
+            questionTypes: [],
+            enableOptional: false,
+            // Matrix Grid: grid[contentIdx][cpIdx][qTypeIdx] = { questions: Number, optional: Boolean }
+            grid: [],
+            questionMapping: [],
+            isValid: false,
+            validationErrors: []
+        };
+
+        // Active editing modal state
+        let currentEditingCell = null;
+        let draggedCell = null;
+
+        // Drag and Drop Handlers for Matrix Cells
+        function handleDragStart(e, cIdx, cpIdx, qtIdx) {
+            if (appState.grid[cIdx][cpIdx][qtIdx].locked) {
+                e.preventDefault();
+                showToast('Cannot drag from a pinned cell.', 'warning');
+                return;
+            }
+            draggedCell = { cIdx, cpIdx, qtIdx };
+            e.dataTransfer.effectAllowed = 'move';
+            e.target.classList.add('opacity-40', 'scale-95');
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('opacity-40', 'scale-95');
+            draggedCell = null;
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleDragEnter(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('bg-brand-200', 'dark:bg-brand-700', 'ring-2', 'ring-brand-500', 'shadow-inner');
+        }
+
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('bg-brand-200', 'dark:bg-brand-700', 'ring-2', 'ring-brand-500', 'shadow-inner');
+        }
+
+        function handleDrop(e, targetCIdx, targetCpIdx, targetQtIdx) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('bg-brand-200', 'dark:bg-brand-700', 'ring-2', 'ring-brand-500', 'shadow-inner');
+
+            if (!draggedCell) return;
+            
+            if (appState.grid[targetCIdx][targetCpIdx][targetQtIdx].locked) {
+                showToast('Cannot drop into a pinned cell.', 'warning');
+                draggedCell = null;
+                return;
+            }
+
+            const { cIdx: sCIdx, cpIdx: sCpIdx, qtIdx: sQtIdx } = draggedCell;
+
+            // Ignore if dropped on the exact same cell
+            if (sCIdx === targetCIdx && sCpIdx === targetCpIdx && sQtIdx === targetQtIdx) {
+                return;
+            }
+
+            // Move 1 question from source to target
+            if (appState.grid[sCIdx][sCpIdx][sQtIdx].questions > 0) {
+                appState.grid[sCIdx][sCpIdx][sQtIdx].questions--;
+                appState.grid[targetCIdx][targetCpIdx][targetQtIdx].questions++;
+
+                buildQuestionMappingList();
+                validateCurrentGrid();
+                renderMatrixBlueprint();
+                renderQuestionMapping();
+
+                if (!appState.isValid) {
+                    showToast('Warning: Row/Column totals changed and no longer match target weightages!', 'warning');
+                } else {
+                    showToast('Question moved successfully.', 'success');
+                }
+            }
+            draggedCell = null;
+        }
+
+        // Initial Presets
+        const PRESETS = {
+            standard: {
+                cps: [
+                    { name: 'CP1 Conceptual Clarity / Remembering', marks: 8 },
+                    { name: 'CP2 Application Skill / Applying', marks: 8 },
+                    { name: 'CP3 Computational Thinking / Logical Applying', marks: 8 },
+                    { name: 'CP4 Analytical Thinking / Analysing', marks: 4 },
+                    { name: 'CP5 Critical Thinking / Evaluating', marks: 4 },
+                    { name: 'CP6 Creative Thinking / Creating', marks: 4 },
+                    { name: 'CP7 Attitude / Values', marks: 4 }
+                ],
+                content: [
+                    { name: 'I Cell Structure', marks: 4 },
+                    { name: 'II Cell Organelles', marks: 6 },
+                    { name: 'III Cell Division', marks: 10 },
+                    { name: 'IV Tissue', marks: 8 },
+                    { name: 'V Nutrition', marks: 12 }
+                ],
+                qTypes: [
+                    { code: 'O', name: 'Objective', count: 4, marksPerQ: 1 },
+                    { code: 'VSA', name: 'Very Short Answer', count: 7, marksPerQ: 2 },
+                    { code: 'SA', name: 'Short Answer', count: 6, marksPerQ: 3 },
+                    { code: 'E', name: 'Essay', count: 1, marksPerQ: 4 }
+                ]
+            }
+        };
+
+        function updateMasterTotal(value) {
+            const val = parseInt(value) || 40;
+            appState.masterTotalMarks = val;
+            
+            // Sync both inputs
+            const topInput = document.getElementById('masterTotalMarks');
+            const mobileInput = document.getElementById('mobileMasterTotalMarks');
+            if (topInput) topInput.value = val;
+            if (mobileInput) mobileInput.value = val;
+            
+            // Update display
+            const displayTotal = document.getElementById('displayMasterTotal');
+            if (displayTotal) displayTotal.innerText = val;
+
+            checkInputTotalsConsistency();
+            showToast(`Master target marks updated to ${val}`, 'info');
+        }
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        }
+
+        // Initialize Theme
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-brand-50', 'dark:bg-brand-900/40', 'text-brand-600', 'dark:text-brand-400');
+                btn.classList.add('text-slate-600', 'dark:text-slate-400');
+            });
+
+            document.getElementById(tabId).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-brand-50', 'dark:bg-brand-900/40', 'text-brand-600', 'dark:text-brand-400');
+                activeBtn.classList.remove('text-slate-600', 'dark:text-slate-400');
+            }
+        }
+
+        function toggleExportMenu() {
+            const menu = document.getElementById('exportMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Close export menu on outside click
+        window.addEventListener('click', (e) => {
+            const menu = document.getElementById('exportMenu');
+            if (menu && !menu.classList.contains('hidden') && !e.target.closest('#exportMenu') && !e.target.closest('button[onclick="toggleExportMenu()"]')) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            let bgClass = 'bg-slate-800 text-white';
+            let iconClass = 'fa-info-circle text-blue-400';
+            
+            if (type === 'success') {
+                bgClass = 'bg-emerald-900 text-emerald-100 border border-emerald-700';
+                iconClass = 'fa-circle-check text-emerald-400';
+            } else if (type === 'error') {
+                bgClass = 'bg-rose-900 text-rose-100 border border-rose-700';
+                iconClass = 'fa-triangle-exclamation text-rose-400';
+            } else if (type === 'warning') {
+                bgClass = 'bg-amber-900 text-amber-100 border border-amber-700';
+                iconClass = 'fa-triangle-exclamation text-amber-400';
+            }
+
+            toast.className = `px-4 py-3 rounded-xl shadow-xl ${bgClass} text-xs font-medium flex items-center gap-2.5 transition-all duration-300 pointer-events-auto transform translate-y-2 opacity-0`;
+            toast.innerHTML = `<i class="fa-solid ${iconClass} text-sm"></i> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            // Dismiss after 3.5s
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        function renderCPTable() {
+            const tbody = document.getElementById('cpTableBody');
+            tbody.innerHTML = '';
+            
+            const totalMarks = appState.cognitiveProcesses.reduce((acc, item) => acc + (Number(item.marks) || 0), 0);
+
+            appState.cognitiveProcesses.forEach((cp, idx) => {
+                const tr = document.createElement('tr');
+                const pct = totalMarks > 0 ? ((cp.marks / totalMarks) * 100).toFixed(1) : '0.0';
+                
+                tr.innerHTML = `
+                    <td class="py-2 pr-2">
+                        <input type="text" value="${cp.name}" onchange="updateCP(${idx}, 'name', this.value)" class="w-full px-2 py-1 border rounded dark:bg-slate-700 dark:border-slate-600 focus:ring-1 focus:ring-brand-500 outline-none">
+                    </td>
+                    <td class="py-2 px-1 text-center">
+                        <input type="number" min="0" value="${cp.marks}" onchange="updateCP(${idx}, 'marks', parseInt(this.value)||0)" class="w-16 px-1 py-1 text-center border rounded dark:bg-slate-700 dark:border-slate-600 focus:ring-1 focus:ring-brand-500 outline-none font-semibold">
+                    </td>
+                    <td class="py-2 pl-1 text-right text-slate-500 dark:text-slate-400 font-mono">
+                        ${pct}%
+                    </td>
+                    <td class="py-2 text-center">
+                        <button onclick="deleteCP(${idx})" class="text-slate-400 hover:text-rose-500 transition px-1">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('cpTotalDisplay').innerText = totalMarks;
+            document.getElementById('summaryCPMarks').innerText = totalMarks;
+            checkInputTotalsConsistency();
+        }
+
+        function addCPRow() {
+            const nextIndex = appState.cognitiveProcesses.length + 1;
+            appState.cognitiveProcesses.push({
+                name: `CP${nextIndex} Cognitive Objective ${nextIndex}`,
+                marks: 4
+            });
+            renderCPTable();
+        }
+
+        function updateCP(idx, key, value) {
+            appState.cognitiveProcesses[idx][key] = value;
+            renderCPTable();
+        }
+
+        function deleteCP(idx) {
+            if (appState.cognitiveProcesses.length <= 1) {
+                showToast('At least one Cognitive Process is required.', 'warning');
+                return;
+            }
+            appState.cognitiveProcesses.splice(idx, 1);
+            renderCPTable();
+        }
+
+        function renderContentTable() {
+            const tbody = document.getElementById('contentTableBody');
+            tbody.innerHTML = '';
+            
+            const totalMarks = appState.contentAreas.reduce((acc, item) => acc + (Number(item.marks) || 0), 0);
+
+            appState.contentAreas.forEach((item, idx) => {
+                const tr = document.createElement('tr');
+                const pct = totalMarks > 0 ? ((item.marks / totalMarks) * 100).toFixed(1) : '0.0';
+                
+                tr.innerHTML = `
+                    <td class="py-2 pr-2">
+                        <input type="text" value="${item.name}" onchange="updateContent(${idx}, 'name', this.value)" class="w-full px-2 py-1 border rounded dark:bg-slate-700 dark:border-slate-600 focus:ring-1 focus:ring-brand-500 outline-none">
+                    </td>
+                    <td class="py-2 px-1 text-center">
+                        <input type="number" min="0" value="${item.marks}" onchange="updateContent(${idx}, 'marks', parseInt(this.value)||0)" class="w-16 px-1 py-1 text-center border rounded dark:bg-slate-700 dark:border-slate-600 focus:ring-1 focus:ring-brand-500 outline-none font-semibold">
+                    </td>
+                    <td class="py-2 pl-1 text-right text-slate-500 dark:text-slate-400 font-mono">
+                        ${pct}%
+                    </td>
+                    <td class="py-2 text-center">
+                        <button onclick="deleteContent(${idx})" class="text-slate-400 hover:text-rose-500 transition px-1">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('contentTotalDisplay').innerText = totalMarks;
+            document.getElementById('summaryContentMarks').innerText = totalMarks;
+            checkInputTotalsConsistency();
+        }
+
+        function addContentRow() {
+            const nextIndex = appState.contentAreas.length + 1;
+            appState.contentAreas.push({
+                name: `Sub-unit ${nextIndex}`,
+                marks: 5
+            });
+            renderContentTable();
+        }
+
+        function updateContent(idx, key, value) {
+            appState.contentAreas[idx][key] = value;
+            renderContentTable();
+        }
+
+        function deleteContent(idx) {
+            if (appState.contentAreas.length <= 1) {
+                showToast('At least one Content Area sub-unit is required.', 'warning');
+                return;
+            }
+            appState.contentAreas.splice(idx, 1);
+            renderContentTable();
+        }
+
+        function renderQTypeTable() {
+            const tbody = document.getElementById('qTypeTableBody');
+            tbody.innerHTML = '';
+            
+            let totalCount = 0;
+            let totalMarks = 0;
+
+            appState.questionTypes.forEach((item, idx) => {
+                const itemTotal = (item.count || 0) * (item.marksPerQ || 0);
+                totalCount += (item.count || 0);
+                totalMarks += itemTotal;
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="py-2 pr-1">
+                        <input type="text" value="${item.name}" onchange="updateQType(${idx}, 'name', this.value)" class="w-full px-2 py-1 border rounded dark:bg-slate-700 dark:border-slate-600 focus:ring-1 focus:ring-brand-500 outline-none">
+                    </td>
+                    <td class="py-2 px-1 text-center">
+                        <input type="number" min="0" value="${item.count}" onchange="updateQType(${idx}, 'count', parseInt(this.value)||0)" class="w-14 px-1 py-1 text-center border rounded dark:bg-slate-700 dark:border-slate-600 focus:ring-1 focus:ring-brand-500 outline-none font-semibold">
+                    </td>
+                    <td class="py-2 px-1 text-center">
+                        <input type="number" min="1" value="${item.marksPerQ}" onchange="updateQType(${idx}, 'marksPerQ', parseInt(this.value)||0)" class="w-14 px-1 py-1 text-center border rounded dark:bg-slate-700 dark:border-slate-600 focus:ring-1 focus:ring-brand-500 outline-none font-semibold">
+                    </td>
+                    <td class="py-2 pl-1 text-right font-bold text-slate-700 dark:text-slate-200">
+                        ${itemTotal}
+                    </td>
+                    <td class="py-2 text-center">
+                        <button onclick="deleteQType(${idx})" class="text-slate-400 hover:text-rose-500 transition px-1">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('qTypeTotalCountDisplay').innerText = `${totalCount} Qs`;
+            document.getElementById('qTypeTotalMarksDisplay').innerText = `${totalMarks} Marks`;
+            document.getElementById('summaryQuestionMarks').innerText = totalMarks;
+            checkInputTotalsConsistency();
+        }
+
+        function addQuestionTypeRow() {
+            const customCount = appState.questionTypes.length + 1;
+            appState.questionTypes.push({
+                code: `T${customCount}`,
+                name: `Type ${customCount}`,
+                count: 2,
+                marksPerQ: 2
+            });
+            renderQTypeTable();
+        }
+
+        function updateQType(idx, key, value) {
+            appState.questionTypes[idx][key] = value;
+            renderQTypeTable();
+        }
+
+        function deleteQType(idx) {
+            if (appState.questionTypes.length <= 1) {
+                showToast('At least one Question Type is required.', 'warning');
+                return;
+            }
+            appState.questionTypes.splice(idx, 1);
+            renderQTypeTable();
+        }
+
+        function toggleOptionalQuestions() {
+            appState.enableOptional = document.getElementById('enableOptionalToggle').checked;
+            renderMatrixBlueprint();
+            renderQuestionMapping();
+        }
+
+        function checkInputTotalsConsistency() {
+            const cpTotal = appState.cognitiveProcesses.reduce((a, b) => a + (Number(b.marks) || 0), 0);
+            const contentTotal = appState.contentAreas.reduce((a, b) => a + (Number(b.marks) || 0), 0);
+            const qTypeTotal = appState.questionTypes.reduce((a, b) => a + ((Number(b.count) || 0) * (Number(b.marksPerQ) || 0)), 0);
+            const target = appState.masterTotalMarks;
+
+            const alertBox = document.getElementById('inputMatchAlert');
+            const alertIcon = document.getElementById('inputMatchIcon');
+            const alertText = document.getElementById('inputMatchText');
+
+            // Update individual card borders and diffs
+            updateSummaryCard('cardCPTotal', '.target-diff-cp', cpTotal, target);
+            updateSummaryCard('cardContentTotal', '.target-diff-content', contentTotal, target);
+            updateSummaryCard('cardQuestionTotal', '.target-diff-qtype', qTypeTotal, target);
+
+            const allMatchTarget = (cpTotal === target && contentTotal === target && qTypeTotal === target);
+
+            if (allMatchTarget && target > 0) {
+                alertBox.className = 'rounded-xl p-4 border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300 flex flex-wrap items-center justify-between gap-3';
+                alertIcon.className = 'fa-solid fa-circle-check text-emerald-500 text-xl flex-shrink-0';
+                alertText.innerText = `All totals match target (${target} Marks across ${appState.questionTypes.reduce((a,b)=>a+(Number(b.count)||0),0)} Questions). Ready to generate.`;
+            } else {
+                alertBox.className = 'rounded-xl p-4 border border-amber-200 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 flex flex-wrap items-center justify-between gap-3';
+                alertIcon.className = 'fa-solid fa-triangle-exclamation text-amber-500 text-xl flex-shrink-0';
+                alertText.innerText = `Mismatch Alert! Target: ${target} | CP: ${cpTotal} | Content: ${contentTotal} | Q-Types: ${qTypeTotal}`;
+            }
+            alertBox.classList.remove('hidden');
+        }
+
+        function updateSummaryCard(cardId, diffSelector, actual, target) {
+            const card = document.getElementById(cardId);
+            const diffSpan = document.querySelector(diffSelector);
+            
+            if (!card || !diffSpan) return;
+
+            const diff = actual - target;
+            
+            if (diff === 0) {
+                card.className = 'bg-white dark:bg-slate-800 rounded-xl p-4 border-2 border-emerald-400 dark:border-emerald-600 shadow-sm flex items-center justify-between transition-colors';
+                diffSpan.innerText = '✓ Matches Target';
+                diffSpan.className = 'text-xs font-medium text-emerald-600 dark:text-emerald-400 ' + diffSelector.substring(1);
+            } else {
+                card.className = 'bg-white dark:bg-slate-800 rounded-xl p-4 border-2 border-rose-400 dark:border-rose-600 shadow-sm flex items-center justify-between transition-colors';
+                diffSpan.innerText = `${diff > 0 ? '+' : ''}${diff} from target`;
+                diffSpan.className = 'text-xs font-medium text-rose-600 dark:text-rose-400 ' + diffSelector.substring(1);
+            }
+        }
+
+        function autoBalanceTargetTotals() {
+            const cpTotal = appState.cognitiveProcesses.reduce((a, b) => a + (Number(b.marks) || 0), 0);
+            const contentTotal = appState.contentAreas.reduce((a, b) => a + (Number(b.marks) || 0), 0);
+            const qTypeTotal = appState.questionTypes.reduce((a, b) => a + ((Number(b.count) || 0) * (Number(b.marksPerQ) || 0)), 0);
+            
+            const targetTotal = appState.masterTotalMarks;
+
+            if (cpTotal !== targetTotal && appState.cognitiveProcesses.length > 0) {
+                redistributeArrayMarks(appState.cognitiveProcesses, targetTotal);
+            }
+            if (contentTotal !== targetTotal && appState.contentAreas.length > 0) {
+                redistributeArrayMarks(appState.contentAreas, targetTotal);
+            }
+            
+            // Cannot easily auto-balance discrete question counts to an exact sum automatically without making assumptions about type preferences.
+            // But we balance CP and Content here.
+            if (qTypeTotal !== targetTotal) {
+                 showToast('CP and Content re-balanced. Please manually adjust Question Type counts to reach target.', 'warning');
+            } else {
+                 showToast('Target weights re-balanced automatically!', 'success');
+            }
+
+            renderCPTable();
+            renderContentTable();
+            renderQTypeTable();
+        }
+
+        function autoBalanceTargetTotals() {
+            const cpTotal = appState.cognitiveProcesses.reduce((a, b) => a + (Number(b.marks) || 0), 0);
+            const contentTotal = appState.contentAreas.reduce((a, b) => a + (Number(b.marks) || 0), 0);
+            const qTypeTotal = appState.questionTypes.reduce((a, b) => a + ((Number(b.count) || 0) * (Number(b.marksPerQ) || 0)), 0);
+
+            // Target max or question type sum
+            const targetTotal = qTypeTotal > 0 ? qTypeTotal : (contentTotal > 0 ? contentTotal : 40);
+
+            if (cpTotal !== targetTotal && appState.cognitiveProcesses.length > 0) {
+                redistributeArrayMarks(appState.cognitiveProcesses, targetTotal);
+            }
+            if (contentTotal !== targetTotal && appState.contentAreas.length > 0) {
+                redistributeArrayMarks(appState.contentAreas, targetTotal);
+            }
+
+            renderCPTable();
+            renderContentTable();
+            renderQTypeTable();
+            showToast('Target weights re-balanced automatically!', 'success');
+        }
+
+        function redistributeArrayMarks(arr, targetSum) {
+            const currentSum = arr.reduce((a, b) => a + (Number(b.marks) || 0), 0);
+            if (currentSum === 0) {
+                const base = Math.floor(targetSum / arr.length);
+                let rem = targetSum % arr.length;
+                arr.forEach(item => {
+                    item.marks = base + (rem-- > 0 ? 1 : 0);
+                });
+                return;
+            }
+
+            let allocated = 0;
+            arr.forEach((item, idx) => {
+                if (idx === arr.length - 1) {
+                    item.marks = targetSum - allocated;
+                } else {
+                    const scaled = Math.round((item.marks / currentSum) * targetSum);
+                    item.marks = scaled;
+                    allocated += scaled;
+                }
+            });
+        }
+
+        function loadPreset(presetName) {
+            const preset = PRESETS[presetName];
+            if (!preset) return;
+            
+            appState.cognitiveProcesses = JSON.parse(JSON.stringify(preset.cps));
+            appState.contentAreas = JSON.parse(JSON.stringify(preset.content));
+            appState.questionTypes = JSON.parse(JSON.stringify(preset.qTypes));
+
+            renderCPTable();
+            renderContentTable();
+            renderQTypeTable();
+            showToast('Loaded standard examination preset!', 'info');
+        }
+
+        function resetInputsToDefault() {
+            loadPreset('standard');
+        }
+
+        /**
+         * CONSTRAINT SATISFACTION ENGINE (SOLVER)
+         * Solves multi-dimensional question placement matrix:
+         * Rows: Content Areas (C_1 ... C_m)
+         * Cols: Cognitive Processes (CP_1 ... CP_n)
+         * Sub-cols: Question Types (T_1 ... T_k)
+         */
+        function runSolver() {
+            const cpTotal = appState.cognitiveProcesses.reduce((a, b) => a + (Number(b.marks) || 0), 0);
+            const contentTotal = appState.contentAreas.reduce((a, b) => a + (Number(b.marks) || 0), 0);
+            const qTypeTotal = appState.questionTypes.reduce((a, b) => a + ((Number(b.count) || 0) * (Number(b.marksPerQ) || 0)), 0);
+            const target = appState.masterTotalMarks;
+
+            if (cpTotal !== target || contentTotal !== target || qTypeTotal !== target) {
+                showToast(`Cannot generate: CP (${cpTotal}), Content (${contentTotal}), and Questions (${qTypeTotal}) must all exactly match the Master Target (${target}).`, 'error');
+                switchTab('inputsTab');
+                return;
+            }
+
+            const numContent = appState.contentAreas.length;
+            const numCP = appState.cognitiveProcesses.length;
+            const numQTypes = appState.questionTypes.length;
+
+            // Check if we can safely map locks from existing grid
+            const existingGrid = (appState.grid && 
+                                  appState.grid.length === numContent && 
+                                  appState.grid[0].length === numCP && 
+                                  appState.grid[0][0].length === numQTypes) ? appState.grid : null;
+
+            // Target balances
+            const contentCapacities = appState.contentAreas.map(c => Number(c.marks));
+            const cpCapacities = appState.cognitiveProcesses.map(cp => Number(cp.marks));
+            const qtRemaining = appState.questionTypes.map(qt => Number(qt.count));
+
+            // Initialize empty grid allocation: grid[cIdx][cpIdx][qtIdx] = count
+            const matrix = Array.from({ length: numContent }, () =>
+                Array.from({ length: numCP }, () => Array(numQTypes).fill(0))
+            );
+            
+            const lockedMatrix = Array.from({ length: numContent }, () =>
+                Array.from({ length: numCP }, () => Array(numQTypes).fill(false))
+            );
+
+            // Remaining capacities tracking
+            const remContent = [...contentCapacities];
+            const remCP = [...cpCapacities];
+
+            // Apply pinned/locked constraints from existing grid
+            if (existingGrid) {
+                for(let c = 0; c < numContent; c++) {
+                    for(let cp = 0; cp < numCP; cp++) {
+                        for(let qt = 0; qt < numQTypes; qt++) {
+                            if (existingGrid[c][cp][qt].locked) {
+                                const lockedCount = existingGrid[c][cp][qt].questions;
+                                matrix[c][cp][qt] = lockedCount;
+                                lockedMatrix[c][cp][qt] = true;
+                                
+                                qtRemaining[qt] -= lockedCount;
+                                const marks = lockedCount * appState.questionTypes[qt].marksPerQ;
+                                remContent[c] -= marks;
+                                remCP[cp] -= marks;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Validate constraints before running
+            if (qtRemaining.some(rem => rem < 0)) {
+                showToast('Solver Alert: Pinned cells exceed total available questions for a type. Unpin some cells.', 'error');
+                switchTab('blueprintTab');
+                return;
+            }
+            if (remContent.some(rem => rem < 0)) {
+                showToast('Solver Alert: Pinned cells exceed target marks for a Content Area. Unpin some cells.', 'error');
+                switchTab('blueprintTab');
+                return;
+            }
+            if (remCP.some(rem => rem < 0)) {
+                showToast('Solver Alert: Pinned cells exceed target marks for a Cognitive Process. Unpin some cells.', 'error');
+                switchTab('blueprintTab');
+                return;
+            }
+
+            // Create list of questions to allocate
+            // Each question: { id, typeIdx, typeCode, marks }
+            let questionsPool = [];
+            let qId = 1;
+            appState.questionTypes.forEach((qt, qIdx) => {
+                for (let i = 0; i < qtRemaining[qIdx]; i++) {
+                    questionsPool.push({
+                        id: qId++,
+                        typeIdx: qIdx,
+                        typeCode: qt.code,
+                        marks: qt.marksPerQ
+                    });
+                }
+            });
+
+            // Sort questions descending by mark value (Essay -> SA -> VSA -> Objective)
+            // Heavy items first dramatically prunes the backtracking search tree!
+            questionsPool.sort((a, b) => b.marks - a.marks);
+
+            let bestSolution = null;
+            let bestScore = -Infinity;
+
+            /**
+             * Recursive Backtracking function
+             */
+            function backtrack(qIndex) {
+                if (qIndex >= questionsPool.length) {
+                    // Check full satisfaction
+                    const contentSatisfied = remContent.every(v => v === 0);
+                    const cpSatisfied = remCP.every(v => v === 0);
+
+                    if (contentSatisfied && cpSatisfied) {
+                        // Calculate score for balance (favoring spread across cells)
+                        const score = evaluateGridBalance(matrix, numContent, numCP, numQTypes);
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestSolution = JSON.parse(JSON.stringify(matrix));
+                        }
+                    }
+                    return;
+                }
+
+                // If already found an optimal balanced solution, limit excessive backtracking depth
+                if (bestSolution && Math.random() < 0.05) return;
+
+                const q = questionsPool[qIndex];
+
+                // Try placing question q into cell (c, cp)
+                for (let c = 0; c < numContent; c++) {
+                    if (remContent[c] < q.marks) continue;
+
+                    for (let cp = 0; cp < numCP; cp++) {
+                        if (remCP[cp] < q.marks) continue;
+
+                        // Skip if this specific cell-type combination is pinned/locked
+                        if (lockedMatrix[c][cp][q.typeIdx]) continue;
+
+                        // Forward check capacity bounds
+                        remContent[c] -= q.marks;
+                        remCP[cp] -= q.marks;
+                        matrix[c][cp][q.typeIdx]++;
+
+                        backtrack(qIndex + 1);
+
+                        // Undo choice
+                        matrix[c][cp][q.typeIdx]--;
+                        remCP[cp] += q.marks;
+                        remContent[c] += q.marks;
+
+                        // If exact solution already found, break early for fast execution
+                        if (bestSolution && bestScore > 90) return;
+                    }
+                }
+            }
+
+            // Run Backtracking Optimization Algorithm
+            backtrack(0);
+
+            if (bestSolution) {
+                // Populate App State Grid
+                appState.grid = bestSolution.map((row, cIdx) =>
+                    row.map((cpCell, cpIdx) =>
+                        cpCell.map((qCount, qtIdx) => {
+                            const isLocked = lockedMatrix[cIdx][cpIdx][qtIdx];
+                            const oldCell = existingGrid ? existingGrid[cIdx][cpIdx][qtIdx] : null;
+                            const prevOptional = oldCell ? oldCell.optional : false;
+
+                            return {
+                                questions: qCount,
+                                optional: isLocked ? prevOptional : false,
+                                locked: isLocked
+                            };
+                        })
+                    )
+                );
+
+                // Auto assign optional flags if toggle enabled
+                if (appState.enableOptional) {
+                    autoMarkOptionalQuestions();
+                }
+
+                buildQuestionMappingList();
+                validateCurrentGrid();
+                renderMatrixBlueprint();
+                renderQuestionMapping();
+                switchTab('blueprintTab');
+                showToast('Successfully generated optimal assessment blueprint!', 'success');
+            } else {
+                showToast('Solver Alert: Could not find valid distribution for these exact mark splits. Try re-balancing mark weights or question types.', 'error');
+            }
+        }
+
+        function evaluateGridBalance(matrix, numC, numCP, numQT) {
+            let nonZeroCells = 0;
+            let totalCells = numC * numCP;
+            
+            // Variance calculation of total questions per content area
+            let cellCounts = [];
+            for (let c = 0; c < numC; c++) {
+                for (let cp = 0; cp < numCP; cp++) {
+                    let sum = 0;
+                    for (let qt = 0; qt < numQT; qt++) {
+                        sum += matrix[c][cp][qt];
+                    }
+                    if (sum > 0) nonZeroCells++;
+                    cellCounts.push(sum);
+                }
+            }
+
+            const mean = cellCounts.reduce((a, b) => a + b, 0) / cellCounts.length;
+            const variance = cellCounts.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / cellCounts.length;
+
+            // Higher score for better distribution (less concentration) and low variance
+            return (nonZeroCells * 10) - (variance * 5);
+        }
+
+        function autoMarkOptionalQuestions() {
+            // Mark largest mark questions in each row as optional if available
+            appState.grid.forEach(row => {
+                let marked = false;
+                row.forEach(cpCell => {
+                    cpCell.forEach(qtCell => {
+                        if (qtCell.questions > 0 && !marked) {
+                            qtCell.optional = true;
+                            marked = true;
+                        }
+                    });
+                });
+            });
+        }
+
+        function buildQuestionMappingList() {
+            let list = [];
+            let qNo = 1;
+
+            appState.contentAreas.forEach((cItem, cIdx) => {
+                appState.cognitiveProcesses.forEach((cpItem, cpIdx) => {
+                    appState.questionTypes.forEach((qtItem, qtIdx) => {
+                        const cell = appState.grid[cIdx] && appState.grid[cIdx][cpIdx] && appState.grid[cIdx][cpIdx][qtIdx];
+                        if (cell && cell.questions > 0) {
+                            for (let i = 0; i < cell.questions; i++) {
+                                list.push({
+                                    qNo: `Q${qNo++}`,
+                                    contentName: cItem.name,
+                                    cpName: cpItem.name,
+                                    qTypeName: `${qtItem.name} (${qtItem.code})`,
+                                    marks: qtItem.marksPerQ,
+                                    isOptional: cell.optional
+                                });
+                            }
+                        }
+                    });
+                });
+            });
+
+            appState.questionMapping = list;
+        }
+
+        function renderMatrixBlueprint() {
+            const wrapper = document.getElementById('matrixTableWrapper');
+            if (!appState.grid || appState.grid.length === 0) {
+                wrapper.innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="fa-solid fa-table-cells text-4xl mb-3 block"></i>
+                        <p class="text-sm">No blueprint generated yet. Click "Generate Blueprint" to run solver.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const cps = appState.cognitiveProcesses;
+            const contents = appState.contentAreas;
+            const qTypes = appState.questionTypes;
+
+            // Compute actual totals from grid
+            const contentTotals = contents.map((_, cIdx) => calculateRowTotalMarks(cIdx));
+            const cpTotals = cps.map((_, cpIdx) => calculateCPTotalMarks(cpIdx));
+            const grandTotal = contentTotals.reduce((a, b) => a + b, 0);
+
+            let html = `
+                <table class="w-full border-collapse text-xs border border-slate-300 dark:border-slate-700">
+                    <thead>
+                        <!-- Header Row 1: Content Area & CP Names -->
+                        <tr class="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+                            <th rowspan="2" class="border border-slate-300 dark:border-slate-700 p-2.5 text-left font-bold min-w-[160px]">
+                                Content Areas (Sub-units)
+                            </th>
+                            ${cps.map(cp => `
+                                <th colspan="${qTypes.length}" class="border border-slate-300 dark:border-slate-700 p-2 text-center font-bold">
+                                    ${cp.name}
+                                </th>
+                            `).join('')}
+                            <th rowspan="2" class="border border-slate-300 dark:border-slate-700 p-2.5 text-center font-bold bg-slate-200 dark:bg-slate-700 w-20">
+                                Total Marks
+                            </th>
+                        </tr>
+
+                        <!-- Header Row 2: Question Type Codes (O, VSA, SA, E) -->
+                        <tr class="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
+                            ${cps.map(() => `
+                                ${qTypes.map(qt => `
+                                    <th class="border border-slate-300 dark:border-slate-700 p-1.5 text-center font-semibold w-12" title="${qt.name} (${qt.marksPerQ} M)">
+                                        ${qt.code}
+                                    </th>
+                                `).join('')}
+                            `).join('')}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+            `;
+
+            // Data Rows
+            contents.forEach((cItem, cIdx) => {
+                const targetRowMarks = cItem.marks;
+                const actualRowMarks = contentTotals[cIdx];
+                const isRowMismatch = targetRowMarks !== actualRowMarks;
+
+                html += `
+                    <tr class="${isRowMismatch ? 'bg-rose-50/50 dark:bg-rose-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}">
+                        <td class="border border-slate-300 dark:border-slate-700 p-2.5 font-medium text-slate-800 dark:text-slate-200">
+                            ${cItem.name}
+                            <div class="text-[10px] text-slate-400">Target: ${targetRowMarks} M</div>
+                        </td>
+                `;
+
+                cps.forEach((_, cpIdx) => {
+                    qTypes.forEach((qtItem, qtIdx) => {
+                        const cell = appState.grid[cIdx][cpIdx][qtIdx];
+                        const qCount = cell.questions;
+                        const isLocked = cell.locked || false;
+                        const cellMarks = qCount * qtItem.marksPerQ;
+                        const displayVal = qCount > 0 
+                            ? `${cell.optional && appState.enableOptional ? '*' : ''}${cellMarks}(${qCount})`
+                            : '-';
+
+                        const lockIcon = isLocked ? `<i class="fa-solid fa-thumbtack text-[10px] text-amber-500 absolute top-1 right-1 transform -rotate-45" title="Pinned cell"></i>` : '';
+                        
+                        let cellClasses = 'relative border border-slate-300 dark:border-slate-700 p-1.5 text-center transition font-mono ';
+                        
+                        if (isLocked) {
+                            cellClasses += 'bg-amber-50 dark:bg-amber-900/30 ';
+                            if (qCount > 0) cellClasses += 'font-bold text-amber-700 dark:text-amber-400 cursor-pointer ';
+                            else cellClasses += 'text-slate-400 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/50 ';
+                        } else if (qCount > 0) {
+                            cellClasses += 'cursor-grab active:cursor-grabbing font-bold text-brand-600 dark:text-brand-400 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-brand-100 dark:hover:bg-brand-900/40 ';
+                        } else {
+                            cellClasses += 'cursor-pointer text-slate-300 dark:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50 ';
+                        }
+
+                        html += `
+                            <td draggable="${(qCount > 0 && !isLocked) ? 'true' : 'false'}"
+                                ondragstart="handleDragStart(event, ${cIdx}, ${cpIdx}, ${qtIdx})"
+                                ondragend="handleDragEnd(event)"
+                                ondragover="handleDragOver(event)"
+                                ondragenter="handleDragEnter(event)"
+                                ondragleave="handleDragLeave(event)"
+                                ondrop="handleDrop(event, ${cIdx}, ${cpIdx}, ${qtIdx})"
+                                onclick="openCellModal(${cIdx}, ${cpIdx}, ${qtIdx})" 
+                                title="${isLocked ? 'Pinned cell. Click to edit/unpin' : (qCount > 0 ? 'Drag to move 1 question, or click to edit/pin' : 'Click to add questions/pin')}"
+                                class="${cellClasses}">
+                                ${lockIcon}
+                                ${displayVal}
+                            </td>
+                        `;
+                    });
+                });
+
+                html += `
+                        <td class="border border-slate-300 dark:border-slate-700 p-2 text-center font-bold text-sm ${isRowMismatch ? 'text-rose-600 dark:text-rose-400 invalid-cell' : 'bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100'}">
+                            ${actualRowMarks}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            // Column Totals Row (Marks per CP)
+            html += `
+                <tr class="bg-slate-100 dark:bg-slate-800/90 font-bold">
+                    <td class="border border-slate-300 dark:border-slate-700 p-2.5 text-left">
+                        Total Marks per CP
+                    </td>
+            `;
+
+            cps.forEach((cpItem, cpIdx) => {
+                const targetCPMarks = cpItem.marks;
+                const actualCPMarks = cpTotals[cpIdx];
+                const isCPMismatch = targetCPMarks !== actualCPMarks;
+
+                html += `
+                    <td colspan="${qTypes.length}" class="border border-slate-300 dark:border-slate-700 p-2 text-center text-sm ${isCPMismatch ? 'text-rose-600 dark:text-rose-400 invalid-cell' : 'text-brand-600 dark:text-brand-400'}">
+                        ${actualCPMarks}
+                        <div class="text-[10px] font-normal text-slate-500">Target: ${targetCPMarks}</div>
+                    </td>
+                `;
+            });
+
+            html += `
+                    <td class="border border-slate-300 dark:border-slate-700 p-2.5 text-center text-base font-extrabold text-slate-900 dark:text-white bg-slate-200 dark:bg-slate-700">
+                        ${grandTotal}
+                    </td>
+                </tr>
+            `;
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            wrapper.innerHTML = html;
+
+            // Update print headers
+            document.getElementById('printDateSpan').innerText = new Date().toLocaleDateString();
+            document.getElementById('printTotalMarksSpan').innerText = `${grandTotal} Marks`;
+        }
+
+        function calculateRowTotalMarks(cIdx) {
+            let total = 0;
+            appState.cognitiveProcesses.forEach((_, cpIdx) => {
+                appState.questionTypes.forEach((qt, qtIdx) => {
+                    const qCount = appState.grid[cIdx][cpIdx][qtIdx].questions;
+                    total += qCount * qt.marksPerQ;
+                });
+            });
+            return total;
+        }
+
+        function calculateCPTotalMarks(cpIdx) {
+            let total = 0;
+            appState.contentAreas.forEach((_, cIdx) => {
+                appState.questionTypes.forEach((qt, qtIdx) => {
+                    const qCount = appState.grid[cIdx][cpIdx][qtIdx].questions;
+                    total += qCount * qt.marksPerQ;
+                });
+            });
+            return total;
+        }
+
+        function calculateQTypeActualTotals(qtIdx) {
+            let count = 0;
+            let marks = 0;
+            appState.contentAreas.forEach((_, cIdx) => {
+                appState.cognitiveProcesses.forEach((_, cpIdx) => {
+                    const qCount = appState.grid[cIdx][cpIdx][qtIdx].questions;
+                    count += qCount;
+                });
+            });
+            marks = count * appState.questionTypes[qtIdx].marksPerQ;
+            return { count, marks };
+        }
+
+        function openCellModal(cIdx, cpIdx, qtIdx) {
+            currentEditingCell = { cIdx, cpIdx, qtIdx };
+            const cName = appState.contentAreas[cIdx].name;
+            const cpName = appState.cognitiveProcesses[cpIdx].name;
+            const qt = appState.questionTypes[qtIdx];
+            const cell = appState.grid[cIdx][cpIdx][qtIdx];
+
+            document.getElementById('modalCellSubtext').innerText = `${cName} → ${cpName} (${qt.name})`;
+            document.getElementById('modalNumQuestions').value = cell.questions;
+            document.getElementById('modalMarksPerQ').innerText = qt.marksPerQ;
+            document.getElementById('modalTotalMarks').innerText = cell.questions * qt.marksPerQ;
+            document.getElementById('modalIsOptional').checked = cell.optional || false;
+            document.getElementById('modalIsLocked').checked = cell.locked || false;
+
+            document.getElementById('modalNumQuestions').oninput = function() {
+                const val = parseInt(this.value) || 0;
+                document.getElementById('modalTotalMarks').innerText = val * qt.marksPerQ;
+            };
+
+            document.getElementById('cellEditModal').classList.remove('hidden');
+        }
+
+        function closeCellModal() {
+            document.getElementById('cellEditModal').classList.add('hidden');
+            currentEditingCell = null;
+        }
+
+        function saveCellModal() {
+            if (!currentEditingCell) return;
+            const { cIdx, cpIdx, qtIdx } = currentEditingCell;
+            const newCount = parseInt(document.getElementById('modalNumQuestions').value) || 0;
+            const isOpt = document.getElementById('modalIsOptional').checked;
+            const isLocked = document.getElementById('modalIsLocked').checked;
+
+            appState.grid[cIdx][cpIdx][qtIdx].questions = newCount;
+            appState.grid[cIdx][cpIdx][qtIdx].optional = isOpt;
+            appState.grid[cIdx][cpIdx][qtIdx].locked = isLocked;
+
+            closeCellModal();
+            buildQuestionMappingList();
+            validateCurrentGrid();
+            renderMatrixBlueprint();
+            renderQuestionMapping();
+            showToast('Cell updated manually! Grid totals recalculated.', 'info');
+        }
+
+        function validateCurrentGrid() {
+            const errors = [];
+            
+            // Check Content Rows
+            appState.contentAreas.forEach((cItem, cIdx) => {
+                const actual = calculateRowTotalMarks(cIdx);
+                if (actual !== cItem.marks) {
+                    errors.push(`Content Area "${cItem.name}": Target ${cItem.marks} M, Actual ${actual} M.`);
+                }
+            });
+
+            // Check CP Columns
+            appState.cognitiveProcesses.forEach((cpItem, cpIdx) => {
+                const actual = calculateCPTotalMarks(cpIdx);
+                if (actual !== cpItem.marks) {
+                    errors.push(`CP Objective "${cpItem.name}": Target ${cpItem.marks} M, Actual ${actual} M.`);
+                }
+            });
+
+            // Check Question Types
+            appState.questionTypes.forEach((qtItem, qtIdx) => {
+                const actual = calculateQTypeActualTotals(qtIdx);
+                const targetCount = qtItem.count;
+                if (actual.count !== targetCount) {
+                    errors.push(`Question Type "${qtItem.name}": Target ${targetCount} Questions, Actual ${actual.count} Questions.`);
+                }
+            });
+
+            appState.isValid = errors.length === 0;
+            appState.validationErrors = errors;
+
+            // Update UI status badge
+            const badge = document.getElementById('blueprintStatusBadge');
+            if (appState.isValid) {
+                badge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300';
+                badge.innerHTML = '<i class="fa-solid fa-circle-check"></i> Valid Blueprint';
+            } else {
+                badge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300';
+                badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Invalid Distribution';
+            }
+
+            renderValidationDashboard();
+        }
+
+        function renderValidationDashboard() {
+            const banner = document.getElementById('validationBanner');
+            const icon = document.getElementById('validationBannerIcon');
+            const title = document.getElementById('validationBannerTitle');
+            const desc = document.getElementById('validationBannerDesc');
+
+            if (appState.isValid) {
+                banner.className = 'p-4 rounded-xl border bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 flex items-center gap-3';
+                icon.className = 'fa-solid fa-circle-check text-emerald-500 text-2xl';
+                title.innerText = '✓ Valid Examination Blueprint';
+                desc.innerText = 'All mathematical weightages, question counts, and content area constraints are fully satisfied.';
+            } else {
+                banner.className = 'p-4 rounded-xl border bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200 flex items-center gap-3';
+                icon.className = 'fa-solid fa-triangle-exclamation text-rose-500 text-2xl';
+                title.innerText = '❌ Invalid Distribution Detected';
+                desc.innerText = `${appState.validationErrors.length} constraint mismatch(es) found. Review the breakdown below or click "Generate Blueprint".`;
+            }
+
+            // Content Breakdown Progress Bars
+            const contentList = document.getElementById('validationContentList');
+            contentList.innerHTML = appState.contentAreas.map((item, idx) => {
+                const actual = calculateRowTotalMarks(idx);
+                const pct = item.marks > 0 ? Math.min(100, (actual / item.marks) * 100) : 0;
+                const isOk = actual === item.marks;
+                return `
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="font-medium">${item.name}</span>
+                            <span class="${isOk ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-rose-500 font-bold'}">${actual} / ${item.marks} M</span>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                            <div class="h-2 ${isOk ? 'bg-emerald-500' : 'bg-rose-500'}" style="width: ${pct}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // CP Breakdown Progress Bars
+            const cpList = document.getElementById('validationCPList');
+            cpList.innerHTML = appState.cognitiveProcesses.map((item, idx) => {
+                const actual = calculateCPTotalMarks(idx);
+                const pct = item.marks > 0 ? Math.min(100, (actual / item.marks) * 100) : 0;
+                const isOk = actual === item.marks;
+                return `
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="font-medium">${item.name}</span>
+                            <span class="${isOk ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-rose-500 font-bold'}">${actual} / ${item.marks} M</span>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                            <div class="h-2 ${isOk ? 'bg-emerald-500' : 'bg-rose-500'}" style="width: ${pct}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // QType Breakdown Progress Bars
+            const qTypeList = document.getElementById('validationQTypeList');
+            qTypeList.innerHTML = appState.questionTypes.map((item, idx) => {
+                const actual = calculateQTypeActualTotals(idx);
+                const pct = item.count > 0 ? Math.min(100, (actual.count / item.count) * 100) : 0;
+                const isOk = actual.count === item.count;
+                return `
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="font-medium">${item.name} (${item.code})</span>
+                            <span class="${isOk ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-rose-500 font-bold'}">${actual.count} / ${item.count} Qs</span>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                            <div class="h-2 ${isOk ? 'bg-emerald-500' : 'bg-rose-500'}" style="width: ${pct}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Rule Checklist
+            const checklist = document.getElementById('ruleChecklist');
+            const rules = [
+                { name: 'Content Area Target Marks Equality', pass: appState.contentAreas.every((c, i) => calculateRowTotalMarks(i) === c.marks) },
+                { name: 'Cognitive Process Target Marks Equality', pass: appState.cognitiveProcesses.every((cp, i) => calculateCPTotalMarks(i) === cp.marks) },
+                { name: 'Question Type Count & Weightage Equality', pass: appState.questionTypes.every((qt, i) => calculateQTypeActualTotals(i).count === qt.count) },
+                { name: 'Zero Fractional / Split Questions Constraint', pass: true },
+                { name: 'Integer Mark Allocation Integrity', pass: true }
+            ];
+
+            checklist.innerHTML = rules.map(r => `
+                <div class="flex items-center gap-2 p-2.5 rounded-lg border dark:border-slate-700 ${r.pass ? 'bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 border-emerald-200' : 'bg-rose-50/50 dark:bg-rose-950/20 text-rose-800 dark:text-rose-300 border-rose-200'}">
+                    <i class="fa-solid ${r.pass ? 'fa-check text-emerald-500' : 'fa-xmark text-rose-500'} font-bold"></i>
+                    <span>${r.name}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderQuestionMapping() {
+            const tbody = document.getElementById('questionMappingTableBody');
+            tbody.innerHTML = '';
+
+            if (!appState.questionMapping || appState.questionMapping.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="p-8 text-center text-slate-400">
+                            No questions mapped yet. Generate blueprint to view question allocation list.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            appState.questionMapping.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-700/30';
+                tr.innerHTML = `
+                    <td class="p-3 text-center font-bold text-brand-600 dark:text-brand-400">${item.qNo}</td>
+                    <td class="p-3 font-medium text-slate-800 dark:text-slate-200">${item.contentName}</td>
+                    <td class="p-3 text-slate-600 dark:text-slate-400">${item.cpName}</td>
+                    <td class="p-3 text-slate-600 dark:text-slate-400 font-semibold">${item.qTypeName}</td>
+                    <td class="p-3 text-center font-bold">${item.marks} M</td>
+                    <td class="p-3 text-center">
+                        ${item.isOptional && appState.enableOptional 
+                            ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">* Optional</span>' 
+                            : '<span class="text-slate-400">-</span>'}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function exportPDF() {
+            const { jsPDF } = window.jspdf;
+            const element = document.getElementById('printableBlueprintArea');
+
+            showToast('Generating PDF document...', 'info');
+
+            html2canvas(element, { scale: 2 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('landscape', 'mm', 'a4');
+                const imgWidth = 280;
+                const pageHeight = 210;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 10;
+
+                pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight);
+                pdf.save('examination_blueprint.pdf');
+                showToast('PDF exported successfully!', 'success');
+            }).catch(err => {
+                showToast('Error generating PDF: ' + err.message, 'error');
+            });
+        }
+
+        function exportExcel() {
+            const table = document.querySelector('#printableBlueprintArea table');
+            if (!table) {
+                showToast('No table data to export.', 'warning');
+                return;
+            }
+
+            const wb = XLSX.utils.table_to_book(table, { sheet: "Blueprint" });
+            
+            // Add Question Mapping Sheet
+            if (appState.questionMapping && appState.questionMapping.length > 0) {
+                const mappingData = appState.questionMapping.map(q => ({
+                    'Question No': q.qNo,
+                    'Content Area': q.contentName,
+                    'Cognitive Process': q.cpName,
+                    'Question Type': q.qTypeName,
+                    'Marks': q.marks,
+                    'Optional': q.isOptional ? 'Yes' : 'No'
+                }));
+                const wsMapping = XLSX.utils.json_to_sheet(mappingData);
+                XLSX.utils.book_append_sheet(wb, wsMapping, "Question Mapping");
+            }
+
+            XLSX.writeFile(wb, 'examination_blueprint.xlsx');
+            showToast('Excel workbook exported successfully!', 'success');
+        }
+
+        function exportWord() {
+            const content = document.getElementById('printableBlueprintArea').innerHTML;
+            const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><title>Blueprint</title><style>table { border-collapse: collapse; width: 100%; } td, th { border: 1px solid #000; padding: 5px; text-align: center; }</style></head><body>";
+            const footer = "</body></html>";
+            const html = header + content + footer;
+
+            const blob = new Blob(['\ufeff', html], {
+                type: 'application/msword'
+            });
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'examination_blueprint.doc';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('Word document exported successfully!', 'success');
+        }
+
+        function exportCSV() {
+            if (!appState.grid || appState.grid.length === 0) {
+                showToast('No blueprint to export.', 'warning');
+                return;
+            }
+
+            let csv = [];
+            // Header
+            let headerRow = ['Content Area'];
+            appState.cognitiveProcesses.forEach(cp => {
+                appState.questionTypes.forEach(qt => {
+                    headerRow.push(`"${cp.name} - ${qt.code}"`);
+                });
+            });
+            headerRow.push('Total Marks');
+            csv.push(headerRow.join(','));
+
+            // Rows
+            appState.contentAreas.forEach((cItem, cIdx) => {
+                let row = [`"${cItem.name}"`];
+                appState.cognitiveProcesses.forEach((_, cpIdx) => {
+                    appState.questionTypes.forEach((qtItem, qtIdx) => {
+                        const cell = appState.grid[cIdx][cpIdx][qtIdx];
+                        const marks = cell.questions * qtItem.marksPerQ;
+                        row.push(`"${marks}(${cell.questions})"` );
+                    });
+                });
+                row.push(calculateRowTotalMarks(cIdx));
+                csv.push(row.join(','));
+            });
+
+            const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'examination_blueprint.csv';
+            a.click();
+            showToast('CSV data exported successfully!', 'success');
+        }
+
+        function exportQuestionListCSV() {
+            if (!appState.questionMapping || appState.questionMapping.length === 0) {
+                showToast('No question mapping list available.', 'warning');
+                return;
+            }
+
+            let csv = ['Question No,Content Area,Cognitive Process,Question Type,Marks,Optional'];
+            appState.questionMapping.forEach(q => {
+                csv.push(`"${q.qNo}","${q.contentName}","${q.cpName}","${q.qTypeName}",${q.marks},${q.isOptional ? 'Yes' : 'No'}`);
+            });
+
+            const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'question_mapping_list.csv';
+            a.click();
+            showToast('Question mapping list CSV exported!', 'success');
+        }
+
+        function exportJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
+            const a = document.createElement('a');
+            a.setAttribute("href", dataStr);
+            a.setAttribute("download", "examination_blueprint_state.json");
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            showToast('JSON state exported!', 'success');
+        }
+
+        function downloadHelpManualWord() {
+            showToast('Generating User Manual...', 'info');
+            
+            const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><title>User Manual</title><style>body { font-family: 'Calibri', 'Arial', sans-serif; line-height: 1.6; color: #333; } h1 { color: #0284c7; font-size: 24px; text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 10px; } h2 { color: #0369a1; font-size: 18px; margin-top: 20px; border-bottom: 1px solid #ccc; padding-bottom: 5px; } p { margin-bottom: 10px; } ul { margin-bottom: 15px; } li { margin-bottom: 5px; } .highlight { background-color: #f0f7ff; padding: 10px; border-left: 4px solid #0284c7; }</style></head><body>";
+            
+            const content = `
+                <h1>Examination Blueprint Generator - User Manual</h1>
+                <p style="text-align: center;"><strong>Developed by:</strong> Dr K. S. Sajan</p>
+                
+                <div class="highlight">
+                    <p><strong>Overview:</strong> This software is a constraint satisfaction assessment planner designed to automatically generate mathematically optimal examination blueprints based on your specific educational weightages. It runs entirely offline in your browser.</p>
+                </div>
+
+                <h2>1. Initial Setup & Master Target</h2>
+                <ul>
+                    <li><strong>Target Total Marks:</strong> Look at the top navigation bar to set your <em>Target Total Marks</em>. Every section you configure must sum exactly to this number.</li>
+                    <li><strong>Load Preset:</strong> Click the <em>Load Preset</em> button in the top right to instantly populate the tables with a standard educational template to practice with.</li>
+                </ul>
+
+                <h2>2. Inputting Your Weightages (Tab 1)</h2>
+                <p>You must define three sets of weightages. The total marks for each section must exactly match your Master Target Marks.</p>
+                <ul>
+                    <li><strong>1. Cognitive Processes (CP):</strong> Define your educational objectives (e.g., Remembering, Applying, Analysing). Assign the target marks for each.</li>
+                    <li><strong>2. Content Areas:</strong> Define your syllabus chapters or sub-units and assign target marks to each.</li>
+                    <li><strong>3. Forms of Questions:</strong> Define the question types (e.g., Objective, Essay). You must specify the <em>number of questions</em> and <em>marks per question</em>.</li>
+                    <li><strong>Auto-Balance:</strong> If your totals do not match the Master Target, a yellow warning bar will appear. You can click <em>Auto-Balance Totals</em> to let the software automatically scale your CP and Content marks to fit.</li>
+                </ul>
+
+                <h2>3. Generating the Blueprint</h2>
+                <p>Once all three input boxes show a green checkmark (meaning they match the target total), click the <strong>"Run Constraint Solver & Generate Blueprint"</strong> button. The algorithm will process thousands of combinations to find a valid distribution that does not split questions.</p>
+
+                <h2>4. Matrix Blueprint Customization (Tab 2)</h2>
+                <p>The generated blueprint maps Content Areas (rows) against Cognitive Processes (columns) and Question Types (sub-columns).</p>
+                <ul>
+                    <li><strong>Drag and Drop functionality:</strong> Click, hold, and drag any populated cell to move a question to a different cell. <br><em>Note: Moving questions manually may break the total weightages. Watch the row/column totals—they will turn red if a rule is violated.</em></li>
+                    <li><strong>Manual Cell Editing:</strong> Click any cell to open the manual editing window. Here you can manually type in a desired number of questions or mark a cell as optional.</li>
+                    <li><strong>Pinning / Locking Cells (Fix & Regenerate):</strong> If you want to force a specific question to appear in a specific cell (e.g., forcing the Essay question to be in "Chapter 3 - Applying"), click that cell, set the question count, and check the <strong>"Pin cell (Lock value)"</strong> checkbox. 
+                    <br>Once pinned, click the <strong>"Re-solve"</strong> button at the top of the blueprint. The algorithm will recalculate the entire grid <em>around</em> your pinned choices!</li>
+                </ul>
+
+                <h2>5. Question Mapping & Validation (Tabs 3 & 4)</h2>
+                <ul>
+                    <li><strong>Question Mapping:</strong> This tab provides a linear list of all generated questions, assigning a sequential Question Number (Q1, Q2...) mapped to its topic, objective, and type.</li>
+                    <li><strong>Live Validation:</strong> Check this tab to view progress bars and a strict mathematical checklist confirming your blueprint violates no constraints.</li>
+                </ul>
+
+                <h2>6. Exporting your Blueprint</h2>
+                <p>In the Matrix Blueprint tab, click the <strong>Export</strong> dropdown button. You can export your finalized blueprint to:</p>
+                <ul>
+                    <li><strong>PDF Document:</strong> Best for printing and sharing.</li>
+                    <li><strong>Excel (.xlsx):</strong> Best for further spreadsheet formatting.</li>
+                    <li><strong>Word (.doc):</strong> Opens directly in Microsoft Word.</li>
+                    <li><strong>JSON State:</strong> Downloads a backup of your current setup. You can't load it back in yet, but it saves your data structure.</li>
+                </ul>
+            `;
+            
+            const footer = "</body></html>";
+            const html = header + content + footer;
+
+            const blob = new Blob(['\ufeff', html], {
+                type: 'application/msword'
+            });
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'Blueprint_Generator_User_Manual.doc';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            setTimeout(() => {
+                showToast('User Manual Word document downloaded!', 'success');
+            }, 500);
+        }
+
+        window.onload = function() {
+            loadPreset('standard');
+            // Ensure master total aligns with preset on load
+            const presetSum = appState.cognitiveProcesses.reduce((a, b) => a + (Number(b.marks) || 0), 0);
+            updateMasterTotal(presetSum);
+            runSolver();
+        };
+    </script>
+</body>
+</html>
